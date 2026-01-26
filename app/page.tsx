@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
-import type { Tournament } from "@/lib/types";
+import { useState, useCallback, useRef, useEffect } from "react";
+import type { Tournament, TopPlacement, ArmyList } from "@/lib/types";
 
 const FACTIONS = [
   { code: "rebellion", name: "Rebel Alliance" },
@@ -126,6 +126,40 @@ export default function Home() {
       setLoading(false);
     }
   }, [faction, dateRange, minPlayers]);
+
+  // Army list modal state
+  const [listModal, setListModal] = useState<{
+    placement: TopPlacement;
+    list: ArmyList | null;
+    loading: boolean;
+    error: string;
+  } | null>(null);
+
+  const handlePlacementClick = useCallback(async (placement: TopPlacement) => {
+    if (!placement.hasList) return;
+
+    setListModal({ placement, list: null, loading: true, error: "" });
+
+    try {
+      const res = await fetch(
+        `/api/list?player=${placement.playerId}&event=${placement.eventId}`
+      );
+      if (!res.ok) {
+        setListModal((prev) =>
+          prev ? { ...prev, loading: false, error: "Failed to load army list." } : null
+        );
+        return;
+      }
+      const data: ArmyList = await res.json();
+      setListModal((prev) =>
+        prev ? { ...prev, list: data, loading: false } : null
+      );
+    } catch {
+      setListModal((prev) =>
+        prev ? { ...prev, loading: false, error: "Network error." } : null
+      );
+    }
+  }, []);
 
   const factionName =
     FACTIONS.find((f) => f.code === faction)?.name ?? faction;
@@ -258,12 +292,24 @@ export default function Home() {
                   key={t.id}
                   tournament={t}
                   highlightFaction={factionName}
+                  onPlacementClick={handlePlacementClick}
                 />
               ))}
             </div>
           </>
         )}
       </div>
+
+      {/* Army List Modal */}
+      {listModal && (
+        <ArmyListModal
+          placement={listModal.placement}
+          list={listModal.list}
+          loading={listModal.loading}
+          error={listModal.error}
+          onClose={() => setListModal(null)}
+        />
+      )}
     </main>
   );
 }
@@ -271,9 +317,11 @@ export default function Home() {
 function TournamentCard({
   tournament,
   highlightFaction,
+  onPlacementClick,
 }: {
   tournament: Tournament;
   highlightFaction: string;
+  onPlacementClick: (placement: TopPlacement) => void;
 }) {
   return (
     <div className="rounded-lg border border-gray-800 bg-gray-900/50 p-4 hover:border-gray-700 transition-colors">
@@ -298,17 +346,26 @@ function TournamentCard({
         {tournament.topThree.map((p) => {
           const isHighlight =
             p.faction.toLowerCase() === highlightFaction.toLowerCase();
+          const clickable = p.hasList;
           return (
             <div
               key={p.place}
-              className={`rounded px-3 py-2 text-xs ${
+              onClick={clickable ? () => onPlacementClick(p) : undefined}
+              className={`rounded px-3 py-2 text-xs transition-colors ${
                 isHighlight
                   ? "bg-yellow-500/10 border border-yellow-500/30"
                   : "bg-gray-800/50 border border-gray-800"
-              }`}
+              } ${clickable ? "cursor-pointer hover:bg-gray-700/50" : ""}`}
             >
-              <div className="text-gray-500 mb-0.5">
-                {p.place === 1 ? "1st" : p.place === 2 ? "2nd" : "3rd"}
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500">
+                  {p.place === 1 ? "1st" : p.place === 2 ? "2nd" : "3rd"}
+                </span>
+                {p.hasList && (
+                  <span className="text-[10px] text-gray-500" title="Has army list">
+                    LIST
+                  </span>
+                )}
               </div>
               <div className="font-medium text-gray-200 truncate">
                 {p.player || "Unknown"}
@@ -323,6 +380,170 @@ function TournamentCard({
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+function ArmyListModal({
+  placement,
+  list,
+  loading,
+  error,
+  onClose,
+}: {
+  placement: TopPlacement;
+  list: ArmyList | null;
+  loading: boolean;
+  error: string;
+  onClose: () => void;
+}) {
+  // Close on Escape key
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-lg border border-gray-700 bg-[#0d0d14] p-6 shadow-xl mx-4">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-200 text-lg leading-none"
+        >
+          &times;
+        </button>
+
+        <h3 className="text-yellow-400 font-semibold text-lg mb-1">
+          {placement.player}
+        </h3>
+        <p className="text-xs text-gray-500 mb-4">
+          {placement.place === 1 ? "1st" : placement.place === 2 ? "2nd" : "3rd"} place &middot; {placement.faction}
+        </p>
+
+        {loading && (
+          <div className="flex items-center gap-2 text-sm text-gray-400 py-8 justify-center">
+            <svg
+              className="animate-spin h-4 w-4 text-yellow-400"
+              viewBox="0 0 24 24"
+              fill="none"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+              />
+            </svg>
+            Loading army list...
+          </div>
+        )}
+
+        {error && (
+          <p className="text-red-400 text-sm py-4 text-center">{error}</p>
+        )}
+
+        {list && (
+          <div className="space-y-4 text-sm">
+            {/* Summary */}
+            <div className="flex gap-4 text-xs text-gray-400">
+              <span>{list.points} pts</span>
+              <span>{list.numActivations} activations</span>
+            </div>
+
+            {/* Units */}
+            <div>
+              <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">
+                Units
+              </h4>
+              <div className="space-y-1.5">
+                {list.units.map((u, i) => (
+                  <div key={i} className="rounded bg-gray-800/50 px-3 py-2">
+                    <div className="font-medium text-gray-200">{u.name}</div>
+                    {u.upgrades.length > 0 && (
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {u.upgrades.join(", ")}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Command Cards */}
+            <div>
+              <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">
+                Command Cards
+              </h4>
+              <div className="flex flex-wrap gap-1.5">
+                {list.commandCards.map((c, i) => (
+                  <span
+                    key={i}
+                    className="rounded bg-gray-800/50 px-2 py-1 text-xs text-gray-300"
+                  >
+                    {c}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Battlefield Deck */}
+            <div>
+              <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">
+                Battlefield Deck
+              </h4>
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div>
+                  <div className="text-gray-500 mb-1">Objectives</div>
+                  {list.battlefieldDeck.objective.map((o, i) => (
+                    <div key={i} className="text-gray-300">{o}</div>
+                  ))}
+                </div>
+                <div>
+                  <div className="text-gray-500 mb-1">Deployments</div>
+                  {list.battlefieldDeck.deployment.map((d, i) => (
+                    <div key={i} className="text-gray-300">{d}</div>
+                  ))}
+                </div>
+                <div>
+                  <div className="text-gray-500 mb-1">Conditions</div>
+                  {list.battlefieldDeck.conditions.map((c, i) => (
+                    <div key={i} className="text-gray-300">{c}</div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* List Link */}
+            {list.listlink && (
+              <div className="pt-2 border-t border-gray-800">
+                <a
+                  href={list.listlink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-yellow-400 hover:text-yellow-300"
+                >
+                  View on Tabletop Admiral &rarr;
+                </a>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

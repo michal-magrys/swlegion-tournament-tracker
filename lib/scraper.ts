@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 import { factionCodeToName } from "./factions";
-import type { Tournament, TopPlacement } from "./types";
+import type { Tournament, TopPlacement, ArmyList } from "./types";
 
 const BASE_URL = "https://legion.longshanks.org";
 
@@ -119,6 +119,11 @@ export async function fetchTopThree(
   for (let i = 0; i < Math.min(3, playerDivs.length); i++) {
     const $div = $(playerDivs[i]);
 
+    // Extract player ID from div id attribute: id="player_37964" → 37964
+    const divId = $div.attr("id") ?? "";
+    const idMatch = divId.match(/^player_(\d+)$/);
+    const playerId = idMatch ? parseInt(idMatch[1], 10) : 0;
+
     // Player name from the first .player_link inside .name
     const playerLink = $div.find(".name .player_link").first();
     const player = playerLink.text().trim();
@@ -134,7 +139,10 @@ export async function fetchTopThree(
       }
     }
 
-    placements.push({ place: i + 1, player, faction });
+    // Detect if the player has uploaded an army list
+    const hasList = $div.find('img[src*="list_code.png"]').length > 0;
+
+    placements.push({ place: i + 1, player, faction, playerId, eventId, hasList });
   }
 
   return placements;
@@ -151,11 +159,11 @@ export async function checkTournament(
   const topThree = await fetchTopThree(event.id);
   if (topThree.length === 0) return null;
 
-  const factionInTop3 = topThree.some(
-    (p) => p.faction.toLowerCase() === faction.toLowerCase()
+  const factionInTop3WithList = topThree.some(
+    (p) => p.faction.toLowerCase() === faction.toLowerCase() && p.hasList
   );
 
-  if (!factionInTop3) return null;
+  if (!factionInTop3WithList) return null;
 
   return {
     id: event.id,
@@ -165,4 +173,71 @@ export async function checkTournament(
     url: `${BASE_URL}/event/${event.id}/`,
     topThree,
   };
+}
+
+/**
+ * Fetch a player's army list from Longshanks.
+ *
+ * The pop_info.php endpoint returns a page with a hidden textarea containing
+ * the list JSON. Longshanks uses "||" as line separators inside the textarea
+ * instead of real newlines, so we must strip them before JSON.parse.
+ */
+export async function fetchArmyList(
+  playerId: number,
+  eventId: number
+): Promise<ArmyList | null> {
+  const url = `${BASE_URL}/admin/players/pop_info.php?player=${playerId}&event=${eventId}&tab=list`;
+  const res = await fetch(url);
+  if (!res.ok) return null;
+
+  const html = await res.text();
+  const $ = cheerio.load(html);
+
+  // Method 1: Extract from the hidden textarea
+  const textarea = $(`textarea#list_${playerId}`);
+  if (textarea.length > 0) {
+    // Longshanks embeds "||" as line separators in the JSON text — strip them
+    const raw = textarea.text().replace(/\s*\|\|\s*/g, " ").trim();
+    if (raw) {
+      try { return JSON.parse(raw) as ArmyList; } catch { /* fall through */ }
+    }
+  }
+
+  // Method 2: Fallback — extract JSON from raw HTML via bracket-counting.
+  // Find the JSON object containing "armyFaction" and walk forward,
+  // counting braces to locate the matching closing brace.
+  const marker = '"armyFaction"';
+  const markerIdx = html.indexOf(marker);
+  if (markerIdx === -1) return null;
+
+  let startIdx = -1;
+  for (let i = markerIdx - 1; i >= 0; i--) {
+    if (html[i] === "{") {
+      startIdx = i;
+      break;
+    }
+  }
+  if (startIdx === -1) return null;
+
+  let depth = 0;
+  let endIdx = -1;
+  for (let i = startIdx; i < html.length; i++) {
+    const ch = html[i];
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) {
+        endIdx = i;
+        break;
+      }
+    }
+  }
+  if (endIdx === -1) return null;
+
+  try {
+    const jsonStr = html.substring(startIdx, endIdx + 1).replace(/\s*\|\|\s*/g, " ");
+    return JSON.parse(jsonStr) as ArmyList;
+  } catch {
+    return null;
+  }
 }
