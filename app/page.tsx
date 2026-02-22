@@ -127,6 +127,7 @@ export default function Home() {
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
+        setStatus("");
         return;
       }
       setStatus("Network error.");
@@ -134,6 +135,10 @@ export default function Home() {
       setLoading(false);
     }
   }, [faction, dateRange, minPlayers, pointFormat]);
+
+  const handleCancel = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
 
   // Army list modal state
   const [listModal, setListModal] = useState<{
@@ -266,6 +271,14 @@ export default function Home() {
             >
               {loading ? "Searching..." : "Search"}
             </button>
+            {loading && (
+              <button
+                onClick={handleCancel}
+                className="rounded bg-gray-700 px-5 py-2 text-sm font-semibold text-gray-200 hover:bg-gray-600 transition-colors"
+              >
+                Cancel
+              </button>
+            )}
           </div>
         </div>
       </div>
