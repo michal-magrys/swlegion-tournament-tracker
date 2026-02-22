@@ -6,7 +6,7 @@ export const maxDuration = 60;
 
 export async function POST(request: Request) {
   const body = (await request.json()) as SearchParams;
-  const { dateFrom, minPlayers, faction } = body;
+  const { dateFrom, minPlayers, faction, pointFormat = '1000' } = body;
 
   const factionName = factionCodeToName(faction);
 
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
 
         let checked = 0;
         for (const event of events) {
-          const result = await checkTournament(event, factionName);
+          const result = await checkTournament(event, factionName, pointFormat);
           checked++;
 
           if (result) {

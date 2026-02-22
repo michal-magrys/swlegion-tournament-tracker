@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 import { factionCodeToName } from "./factions";
-import type { Tournament, TopPlacement, ArmyList } from "./types";
+import type { Tournament, TopPlacement, ArmyList, SearchParams } from "./types";
 
 const BASE_URL = "https://legion.longshanks.org";
 
@@ -154,16 +154,28 @@ export async function fetchTopThree(
  */
 export async function checkTournament(
   event: RawEvent,
-  faction: string
+  faction: string,
+  pointFormat: SearchParams['pointFormat'] = 'all'
 ): Promise<Tournament | null> {
   const topThree = await fetchTopThree(event.id);
   if (topThree.length === 0) return null;
 
-  const factionInTop3WithList = topThree.some(
+  const matchingPlacements = topThree.filter(
     (p) => p.faction.toLowerCase() === faction.toLowerCase() && p.hasList
   );
 
-  if (!factionInTop3WithList) return null;
+  if (matchingPlacements.length === 0) return null;
+
+  if (pointFormat !== 'all') {
+    const first = matchingPlacements[0];
+    const armyList = await fetchArmyList(first.playerId, first.eventId);
+    if (armyList !== null) {
+      const is1000pt = armyList.points >= 800;
+      if (pointFormat === '1000' && !is1000pt) return null;
+      if (pointFormat === '600' && is1000pt) return null;
+    }
+    // If fetch failed (null), fall through and include the tournament
+  }
 
   return {
     id: event.id,

@@ -20,6 +20,12 @@ const DATE_RANGES = [
 
 const MIN_PLAYERS_OPTIONS = [8, 10, 16, 20, 32];
 
+const POINT_FORMATS = [
+  { value: '1000', label: '1000 pts' },
+  { value: '600', label: '600 pts' },
+  { value: 'all', label: 'All formats' },
+];
+
 function getDateFrom(months: number): string {
   const d = new Date();
   d.setMonth(d.getMonth() - months);
@@ -38,6 +44,7 @@ export default function Home() {
   const [faction, setFaction] = useState("galactic_empire");
   const [dateRange, setDateRange] = useState(1);
   const [minPlayers, setMinPlayers] = useState(10);
+  const [pointFormat, setPointFormat] = useState<'1000' | '600' | 'all'>('1000');
   const [results, setResults] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
@@ -62,6 +69,7 @@ export default function Home() {
           dateFrom: getDateFrom(dateRange),
           minPlayers,
           faction,
+          pointFormat,
         }),
         signal: controller.signal,
       });
@@ -125,7 +133,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [faction, dateRange, minPlayers]);
+  }, [faction, dateRange, minPlayers, pointFormat]);
 
   // Army list modal state
   const [listModal, setListModal] = useState<{
@@ -229,6 +237,23 @@ export default function Home() {
                 {MIN_PLAYERS_OPTIONS.map((n) => (
                   <option key={n} value={n}>
                     {n}+
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                Points
+              </label>
+              <select
+                value={pointFormat}
+                onChange={(e) => setPointFormat(e.target.value as '1000' | '600' | 'all')}
+                className="rounded bg-gray-900 border border-gray-700 px-3 py-2 text-sm text-gray-100 focus:border-yellow-500 focus:outline-none"
+              >
+                {POINT_FORMATS.map((f) => (
+                  <option key={f.value} value={f.value}>
+                    {f.label}
                   </option>
                 ))}
               </select>

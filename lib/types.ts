@@ -20,6 +20,7 @@ export interface SearchParams {
   dateFrom: string;
   minPlayers: number;
   faction: string;
+  pointFormat: '1000' | '600' | 'all';
 }
 
 export interface ArmyList {
