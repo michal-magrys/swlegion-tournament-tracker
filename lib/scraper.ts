@@ -167,19 +167,25 @@ export async function checkTournament(
   );
   if (factionPlacements.length === 0) return null;
 
-  // Step 2: point format check (only if a list is available to check)
+  // Step 2: point format check — try all top-3 players to find a usable list.
+  // hasList detection is unreliable, so attempt fetchArmyList for each player
+  // and use the first one that returns a valid list.
   if (pointFormat !== 'all') {
-    const withList = factionPlacements.filter((p) => p.hasList);
-    if (withList.length > 0) {
-      const armyList = await fetchArmyList(withList[0].playerId, withList[0].eventId);
+    // Prefer faction placements first, then the rest.
+    const candidates = [
+      ...factionPlacements,
+      ...topThree.filter((p) => p.faction.toLowerCase() !== faction.toLowerCase()),
+    ];
+    for (const candidate of candidates) {
+      const armyList = await fetchArmyList(candidate.playerId, candidate.eventId);
       if (armyList !== null) {
         const is1000pt = armyList.points >= 800;
         if (pointFormat === '1000' && !is1000pt) return null;
         if (pointFormat === '600' && is1000pt) return null;
+        break; // format determined, tournament passes
       }
-      // fetch failed → fall through and include
     }
-    // no lists uploaded for faction placements → fall through and include
+    // no list found from any top-3 player → fall through and include
   }
 
   return {
@@ -210,13 +216,21 @@ export async function fetchArmyList(
   const html = await res.text();
   const $ = cheerio.load(html);
 
+  // Longshanks JSON uses "point" (singular); normalise to "points" for ArmyList.
+  const normalise = (parsed: ReturnType<typeof JSON.parse>): ArmyList => {
+    if (parsed.points === undefined && parsed.point !== undefined) {
+      parsed.points = parsed.point;
+    }
+    return parsed as ArmyList;
+  };
+
   // Method 1: Extract from the hidden textarea
   const textarea = $(`textarea#list_${playerId}`);
   if (textarea.length > 0) {
     // Longshanks embeds "||" as line separators in the JSON text — strip them
     const raw = textarea.text().replace(/\s*\|\|\s*/g, " ").trim();
     if (raw) {
-      try { return JSON.parse(raw) as ArmyList; } catch { /* fall through */ }
+      try { return normalise(JSON.parse(raw)); } catch { /* fall through */ }
     }
   }
 
@@ -253,7 +267,7 @@ export async function fetchArmyList(
 
   try {
     const jsonStr = html.substring(startIdx, endIdx + 1).replace(/\s*\|\|\s*/g, " ");
-    return JSON.parse(jsonStr) as ArmyList;
+    return normalise(JSON.parse(jsonStr));
   } catch {
     return null;
   }
