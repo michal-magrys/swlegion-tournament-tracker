@@ -42,7 +42,7 @@ export async function fetchEvents(
     const entries = $(".event_display");
     if (entries.length === 0) break;
 
-    let passedCutoff = false;
+    let foundAnyAfterCutoff = false;
 
     entries.each((_, el) => {
       const $el = $(el);
@@ -66,9 +66,10 @@ export async function fetchEvents(
       });
 
       if (date && new Date(date) < cutoff) {
-        passedCutoff = true;
-        return false; // break .each()
+        return; // skip this event, continue checking the rest of the page
       }
+
+      foundAnyAfterCutoff = true;
 
       // Extract player count: find the row with the event size glyph
       let playerCount = 0;
@@ -84,7 +85,7 @@ export async function fetchEvents(
       }
     });
 
-    if (passedCutoff) break;
+    if (!foundAnyAfterCutoff) break; // stop only when the whole page is before cutoff
     page++;
   }
 
@@ -160,21 +161,25 @@ export async function checkTournament(
   const topThree = await fetchTopThree(event.id);
   if (topThree.length === 0) return null;
 
-  const matchingPlacements = topThree.filter(
-    (p) => p.faction.toLowerCase() === faction.toLowerCase() && p.hasList
+  // Step 1: is the faction in the top 3 at all?
+  const factionPlacements = topThree.filter(
+    (p) => p.faction.toLowerCase() === faction.toLowerCase()
   );
+  if (factionPlacements.length === 0) return null;
 
-  if (matchingPlacements.length === 0) return null;
-
+  // Step 2: point format check (only if a list is available to check)
   if (pointFormat !== 'all') {
-    const first = matchingPlacements[0];
-    const armyList = await fetchArmyList(first.playerId, first.eventId);
-    if (armyList !== null) {
-      const is1000pt = armyList.points >= 800;
-      if (pointFormat === '1000' && !is1000pt) return null;
-      if (pointFormat === '600' && is1000pt) return null;
+    const withList = factionPlacements.filter((p) => p.hasList);
+    if (withList.length > 0) {
+      const armyList = await fetchArmyList(withList[0].playerId, withList[0].eventId);
+      if (armyList !== null) {
+        const is1000pt = armyList.points >= 800;
+        if (pointFormat === '1000' && !is1000pt) return null;
+        if (pointFormat === '600' && is1000pt) return null;
+      }
+      // fetch failed → fall through and include
     }
-    // If fetch failed (null), fall through and include the tournament
+    // no lists uploaded for faction placements → fall through and include
   }
 
   return {
