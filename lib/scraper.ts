@@ -201,9 +201,10 @@ export async function checkTournament(
 /**
  * Fetch a player's army list from Longshanks.
  *
- * The pop_info.php endpoint returns a page with a hidden textarea containing
- * the list JSON. Longshanks uses "||" as line separators inside the textarea
- * instead of real newlines, so we must strip them before JSON.parse.
+ * Tries three approaches in order:
+ *   1. New HTML format: parse the `table.legion_list` rendered server-side
+ *   2. Old textarea format: JSON embedded in `<textarea id="list_{playerId}">`
+ *   3. Old bracket-count format: JSON containing "armyFaction" extracted from raw HTML
  */
 export async function fetchArmyList(
   playerId: number,
@@ -224,19 +225,91 @@ export async function fetchArmyList(
     return parsed as ArmyList;
   };
 
-  // Method 1: Extract from the hidden textarea
+  // Method 1: New HTML table format (current Longshanks format)
+  if ($("table.legion_list").length > 0) {
+    // Faction
+    let armyFaction = $('img[src*="/factions/"]').first().attr("title") ?? "";
+    if (!armyFaction) {
+      const src = $('img[src*="/factions/"]').first().attr("src") ?? "";
+      const codeMatch = src.match(/\/factions\/([^/.]+)\.png/);
+      if (codeMatch) armyFaction = factionCodeToName(codeMatch[1]);
+    }
+
+    // Points and activations from any text node matching the pattern
+    let points = 0;
+    let numActivations = 0;
+    const bodyText = $("body").text();
+    const pointsMatch = bodyText.match(/(\d+)\s+points/i);
+    if (pointsMatch) points = parseInt(pointsMatch[1], 10);
+    const activationsMatch = bodyText.match(/(\d+)\s+activations/i);
+    if (activationsMatch) numActivations = parseInt(activationsMatch[1], 10);
+
+    // Units: td[0] contains the name as a direct text node and upgrades in a <ul><li>
+    const units: { name: string; upgrades: string[] }[] = [];
+    $("tr.unit").each((_, row) => {
+      const $cell = $(row).find("td").eq(0);
+      if ($cell.length === 0) return;
+
+      // Name = direct text nodes only (strip <ul> child content)
+      const name = $cell.clone().children().remove().end().text().trim();
+      // Upgrades = <li> items inside the cell
+      const upgrades = $cell.find("li").toArray().map((li) => $(li).text().trim()).filter(Boolean);
+
+      if (name) {
+        units.push({ name, upgrades });
+      } else if (units.length > 0) {
+        units[units.length - 1].upgrades.push(...upgrades);
+      }
+    });
+
+    // Command cards — may be hidden or listed as <li> items
+    const commandCards = $("tr.command")
+      .toArray()
+      .flatMap((row) => {
+        const $td = $(row).find("td").eq(0);
+        const liItems = $td.find("li").toArray().map((li) => $(li).text().trim()).filter(Boolean);
+        if (liItems.length > 0) return liItems;
+        const text = $td.text().trim();
+        return text ? [text] : [];
+      });
+
+    // Battlefield deck — cards are listed as <li> items
+    const conditions = $("tr.condition")
+      .toArray()
+      .flatMap((row) => $(row).find("td").eq(0).find("li").toArray().map((li) => $(li).text().trim()))
+      .filter(Boolean);
+    const deployment = $("tr.deployment")
+      .toArray()
+      .flatMap((row) => $(row).find("td").eq(0).find("li").toArray().map((li) => $(li).text().trim()))
+      .filter(Boolean);
+    const objective = $("tr.objective")
+      .toArray()
+      .flatMap((row) => $(row).find("td").eq(0).find("li").toArray().map((li) => $(li).text().trim()))
+      .filter(Boolean);
+
+    const listlink = $('a[href*="tabletopadmiral"]').first().attr("href") ?? "";
+
+    return {
+      points,
+      numActivations,
+      armyFaction,
+      commandCards,
+      units,
+      battlefieldDeck: { conditions, deployment, objective },
+      listlink,
+    };
+  }
+
+  // Method 2: Old textarea format
   const textarea = $(`textarea#list_${playerId}`);
   if (textarea.length > 0) {
-    // Longshanks embeds "||" as line separators in the JSON text — strip them
     const raw = textarea.text().replace(/\s*\|\|\s*/g, " ").trim();
     if (raw) {
       try { return normalise(JSON.parse(raw)); } catch { /* fall through */ }
     }
   }
 
-  // Method 2: Fallback — extract JSON from raw HTML via bracket-counting.
-  // Find the JSON object containing "armyFaction" and walk forward,
-  // counting braces to locate the matching closing brace.
+  // Method 3: Fallback — extract JSON from raw HTML via bracket-counting.
   const marker = '"armyFaction"';
   const markerIdx = html.indexOf(marker);
   if (markerIdx === -1) return null;
