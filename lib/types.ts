@@ -28,7 +28,7 @@ export interface ArmyList {
   numActivations: number;
   armyFaction: string;
   commandCards: string[];
-  units: { name: string; upgrades: string[] }[];
+  units: { name: string; count: number; upgrades: string[] }[];
   battlefieldDeck: {
     conditions: string[];
     deployment: string[];

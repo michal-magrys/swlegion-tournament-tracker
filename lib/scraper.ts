@@ -245,7 +245,8 @@ export async function fetchArmyList(
     if (activationsMatch) numActivations = parseInt(activationsMatch[1], 10);
 
     // Units: td[0] contains the name as a direct text node and upgrades in a <ul><li>
-    const units: { name: string; upgrades: string[] }[] = [];
+    // td[1] contains the quantity, e.g. "x2"
+    const units: { name: string; count: number; upgrades: string[] }[] = [];
     $("tr.unit").each((_, row) => {
       const $cell = $(row).find("td").eq(0);
       if ($cell.length === 0) return;
@@ -254,9 +255,12 @@ export async function fetchArmyList(
       const name = $cell.clone().children().remove().end().text().trim();
       // Upgrades = <li> items inside the cell
       const upgrades = $cell.find("li").toArray().map((li) => $(li).text().trim()).filter(Boolean);
+      // Count = td[1] text, e.g. "x2"
+      const countText = $(row).find("td").eq(1).text().trim();
+      const count = parseInt(countText.replace(/^x/i, ""), 10) || 1;
 
       if (name) {
-        units.push({ name, upgrades });
+        units.push({ name, count, upgrades });
       } else if (units.length > 0) {
         units[units.length - 1].upgrades.push(...upgrades);
       }

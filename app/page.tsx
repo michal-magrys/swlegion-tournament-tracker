@@ -512,7 +512,10 @@ function ArmyListModal({
               <div className="space-y-1.5">
                 {list.units.map((u, i) => (
                   <div key={i} className="rounded bg-gray-800/50 px-3 py-2">
-                    <div className="font-medium text-gray-200">{u.name}</div>
+                    <div className="font-medium text-gray-200">
+                      {u.count > 1 && <span className="text-gray-400">{u.count}× </span>}
+                      {u.name}
+                    </div>
                     {u.upgrades.length > 0 && (
                       <div className="text-xs text-gray-500 mt-0.5">
                         {u.upgrades.join(", ")}
