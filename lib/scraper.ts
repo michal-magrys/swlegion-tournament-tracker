@@ -102,6 +102,13 @@ export async function fetchEvents(
  *         div.name .player_disp .player_link  ← player name
  *         div.factions img.logo[src*="/factions/"] ← faction image
  */
+function normalizeFactionName(name: string): string {
+  const normalized = name.trim();
+  if (!normalized) return "Unknown";
+  if (/mercenaries?/i.test(normalized)) return "Mercenary";
+  return normalized;
+}
+
 export async function fetchTopThree(
   eventId: number
 ): Promise<TopPlacement[]> {
@@ -137,6 +144,15 @@ export async function fetchTopThree(
       const codeMatch = src.match(/\/factions\/([^/.]+)\.png/);
       if (codeMatch) {
         faction = factionCodeToName(codeMatch[1]);
+      }
+    } else {
+      const awardLogo = $div.find('.factions .logo.award').first();
+      const awardTitle = awardLogo.attr("title")?.trim();
+      if (awardTitle) {
+        faction = normalizeFactionName(awardTitle);
+      } else if (awardLogo.length > 0) {
+        const awardText = awardLogo.text().trim();
+        if (awardText) faction = normalizeFactionName(awardText);
       }
     }
 

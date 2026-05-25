@@ -3,7 +3,7 @@ export const FACTIONS: Record<string, string> = {
   galactic_empire: "Galactic Empire",
   grand_army_republic: "Grand Army of the Republic",
   confederacy: "Confederacy of Independent Systems",
-  shadow_collective: "Shadow Collective",
+  shadow_collective: "Mercenary",
   echo_base: "Echo Base Defenders",
   bright_tree_village: "Bright Tree Village",
   blizzard_force: "Blizzard Force",
@@ -23,7 +23,7 @@ export const PRIMARY_FACTIONS = [
   { code: "galactic_empire", name: "Galactic Empire" },
   { code: "grand_army_republic", name: "Grand Army of the Republic" },
   { code: "confederacy", name: "Confederacy of Independent Systems" },
-  { code: "shadow_collective", name: "Shadow Collective" },
+  { code: "shadow_collective", name: "Mercenary" },
 ] as const;
 
 export function factionCodeToName(code: string): string {

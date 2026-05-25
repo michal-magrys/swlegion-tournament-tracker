@@ -8,7 +8,7 @@ const FACTIONS = [
   { code: "galactic_empire", name: "Galactic Empire" },
   { code: "grand_army_republic", name: "Grand Army of the Republic" },
   { code: "confederacy", name: "Confederacy of Independent Systems" },
-  { code: "shadow_collective", name: "Shadow Collective" },
+  { code: "shadow_collective", name: "Mercenary" },
 ];
 
 const SORTED_FACTIONS = [...FACTIONS].sort((a, b) => a.name.localeCompare(b.name));
