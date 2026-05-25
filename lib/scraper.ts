@@ -260,6 +260,19 @@ export async function fetchArmyList(
     const activationsMatch = bodyText.match(/(\d+)\s+activations/i);
     if (activationsMatch) numActivations = parseInt(activationsMatch[1], 10);
 
+    // If points not found in table text, fall back to the textarea JSON ("point" singular)
+    if (points === 0) {
+      const textarea = $(`textarea#list_${playerId}`);
+      if (textarea.length > 0) {
+        try {
+          const raw = textarea.text().replace(/\s*\|\|\s*/g, " ").trim();
+          const parsed = JSON.parse(raw);
+          if (parsed.point !== undefined) points = parsed.point;
+          else if (parsed.points !== undefined) points = parsed.points;
+        } catch { /* ignore */ }
+      }
+    }
+
     // Units: td[0] contains the name as a direct text node and upgrades in a <ul><li>
     // td[1] contains the quantity, e.g. "x2"
     const units: { name: string; count: number; upgrades: string[] }[] = [];
