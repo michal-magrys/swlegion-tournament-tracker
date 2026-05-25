@@ -11,7 +11,11 @@ const FACTIONS = [
   { code: "shadow_collective", name: "Shadow Collective" },
 ];
 
+const SORTED_FACTIONS = [...FACTIONS].sort((a, b) => a.name.localeCompare(b.name));
+
+// Date ranges: each item may use `days` or `months` for computing the from-date.
 const DATE_RANGES = [
+  { label: "Last week", days: 7 },
   { label: "Last month", months: 1 },
   { label: "Last 3 months", months: 3 },
   { label: "Last 6 months", months: 6 },
@@ -26,9 +30,15 @@ const POINT_FORMATS = [
   { value: 'all', label: 'All formats' },
 ];
 
-function getDateFrom(months: number): string {
+function getDateFrom(rangeIndex: number): string {
+  const opts = DATE_RANGES[rangeIndex];
   const d = new Date();
-  d.setMonth(d.getMonth() - months);
+  if (opts.days) {
+    d.setDate(d.getDate() - opts.days);
+    return d.toISOString().slice(0, 10);
+  }
+  // default to months
+  d.setMonth(d.getMonth() - (opts.months ?? 0));
   return d.toISOString().slice(0, 10);
 }
 
@@ -42,8 +52,8 @@ interface StreamMessage {
 
 export default function Home() {
   const [faction, setFaction] = useState("galactic_empire");
-  const [dateRange, setDateRange] = useState(1);
-  const [minPlayers, setMinPlayers] = useState(10);
+  const [dateRange, setDateRange] = useState(0); // default: Last week
+  const [minPlayers, setMinPlayers] = useState(8);
   const [pointFormat, setPointFormat] = useState<'1000' | '600' | 'all'>('1000');
   const [results, setResults] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(false);
@@ -205,7 +215,7 @@ export default function Home() {
                 onChange={(e) => setFaction(e.target.value)}
                 className="rounded bg-gray-900 border border-gray-700 px-3 py-2 text-sm text-gray-100 focus:border-yellow-500 focus:outline-none"
               >
-                {FACTIONS.map((f) => (
+                {SORTED_FACTIONS.map((f) => (
                   <option key={f.code} value={f.code}>
                     {f.name}
                   </option>
@@ -222,8 +232,8 @@ export default function Home() {
                 onChange={(e) => setDateRange(Number(e.target.value))}
                 className="rounded bg-gray-900 border border-gray-700 px-3 py-2 text-sm text-gray-100 focus:border-yellow-500 focus:outline-none"
               >
-                {DATE_RANGES.map((d) => (
-                  <option key={d.months} value={d.months}>
+                {DATE_RANGES.map((d, i) => (
+                  <option key={i} value={i}>
                     {d.label}
                   </option>
                 ))}
