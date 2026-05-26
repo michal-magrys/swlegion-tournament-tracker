@@ -1,6 +1,12 @@
 import * as cheerio from "cheerio";
 import { factionCodeToName } from "./factions";
 import type { Tournament, TopPlacement, ArmyList, SearchParams } from "./types";
+import {
+  getCachedTopPlacements,
+  setCachedTopPlacements,
+  getCachedArmyList,
+  setCachedArmyList,
+} from "./db";
 
 const BASE_URL = "https://legion.longshanks.org";
 
@@ -112,6 +118,9 @@ function normalizeFactionName(name: string): string {
 export async function fetchTopThree(
   eventId: number
 ): Promise<TopPlacement[]> {
+  const cached = await getCachedTopPlacements(eventId);
+  if (cached !== null) return cached;
+
   const url = `${BASE_URL}/events/detail/panel_standings.php?event=${eventId}&section=player`;
   const res = await fetch(url);
   if (!res.ok) return [];
@@ -129,7 +138,7 @@ export async function fetchTopThree(
 
     // Extract player ID from div id attribute: id="player_37964" → 37964
     const divId = $div.attr("id") ?? "";
-    const idMatch = divId.match(/^player_(\d+)$/);
+    const idMatch = divId.match(/^player_c?(\d+)$/);
     const playerId = idMatch ? parseInt(idMatch[1], 10) : 0;
 
     // Player name from the first .player_link inside .name
@@ -162,6 +171,7 @@ export async function fetchTopThree(
     placements.push({ place: i + 1, player, faction, playerId, eventId, hasList });
   }
 
+  await setCachedTopPlacements(eventId, placements);
   return placements;
 }
 
@@ -226,6 +236,18 @@ export async function fetchArmyList(
   playerId: number,
   eventId: number
 ): Promise<ArmyList | null> {
+  const cached = await getCachedArmyList(playerId, eventId);
+  if (cached !== undefined) return cached;
+
+  const result = await scrapeArmyList(playerId, eventId);
+  await setCachedArmyList(playerId, eventId, result);
+  return result;
+}
+
+async function scrapeArmyList(
+  playerId: number,
+  eventId: number
+): Promise<ArmyList | null> {
   const url = `${BASE_URL}/admin/players/pop_info.php?player=${playerId}&event=${eventId}&tab=list`;
   const res = await fetch(url);
   if (!res.ok) return null;
@@ -243,12 +265,18 @@ export async function fetchArmyList(
 
   // Method 1: New HTML table format (current Longshanks format)
   if ($("table.legion_list").length > 0) {
-    // Faction
-    let armyFaction = $('img[src*="/factions/"]').first().attr("title") ?? "";
+    const tableEl = $("table.legion_list").first();
+
+    // Faction: row[1] of the table holds it as plain text in this format.
+    // Fall back to a global faction image only if the text row is absent.
+    let armyFaction = tableEl.find("tr").eq(1).find("td, th").first().text().trim();
     if (!armyFaction) {
-      const src = $('img[src*="/factions/"]').first().attr("src") ?? "";
-      const codeMatch = src.match(/\/factions\/([^/.]+)\.png/);
-      if (codeMatch) armyFaction = factionCodeToName(codeMatch[1]);
+      armyFaction = tableEl.find('img[src*="/factions/"]').first().attr("title") ?? "";
+      if (!armyFaction) {
+        const src = tableEl.find('img[src*="/factions/"]').first().attr("src") ?? "";
+        const codeMatch = src.match(/\/factions\/([^/.]+)\.png/);
+        if (codeMatch) armyFaction = factionCodeToName(codeMatch[1]);
+      }
     }
 
     // Points and activations from any text node matching the pattern

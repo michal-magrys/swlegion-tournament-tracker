@@ -1,10 +1,13 @@
 import { fetchEvents, checkTournament } from "@/lib/scraper";
 import { factionCodeToName } from "@/lib/factions";
+import { initDb } from "@/lib/db";
 import type { SearchParams } from "@/lib/types";
 
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
+  await initDb();
+
   const body = (await request.json()) as SearchParams;
   const { dateFrom, minPlayers, faction, pointFormat = '1000' } = body;
 

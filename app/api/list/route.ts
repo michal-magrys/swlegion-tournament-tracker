@@ -1,7 +1,9 @@
 import { fetchArmyList } from "@/lib/scraper";
+import { initDb } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
+  await initDb();
   const player = request.nextUrl.searchParams.get("player");
   const event = request.nextUrl.searchParams.get("event");
 
