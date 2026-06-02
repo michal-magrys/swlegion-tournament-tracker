@@ -28,10 +28,6 @@ function saveSeenIds(filterParams: FilterParams, ids: Set<number>): void {
   } catch { /* quota exceeded or private browsing */ }
 }
 
-// Captured before any React effects run — used to initialise state from a
-// shared/bookmarked URL without risking the write effect overwriting it first.
-const INITIAL_SEARCH = typeof window !== "undefined" ? window.location.search : "";
-
 type Tab = "search" | "trends";
 
 function tabFromSearchString(search: string): Tab {
@@ -72,13 +68,23 @@ function paramsFromSearchString(search: string): FilterParams {
 }
 
 export default function Home() {
-  // Lazy initialisers read from the URL captured at module load — safe against
-  // the write effect overwriting them before this runs.
-  const [params, setParams] = useState<FilterParams>(() => paramsFromSearchString(INITIAL_SEARCH));
-  const [tab, setTab] = useState<Tab>(() => tabFromSearchString(INITIAL_SEARCH));
+  const [params, setParams] = useState<FilterParams>(DEFAULT_PARAMS);
+  const [tab, setTab] = useState<Tab>("search");
+  const [urlLoaded, setUrlLoaded] = useState(false);
 
-  // Keep URL in sync with params and tab (runs on every change, including initial render).
+  // Initialise tab and params from URL on first client render.
   useEffect(() => {
+    const search = window.location.search;
+    if (search) {
+      setTab(tabFromSearchString(search));
+      setParams(paramsFromSearchString(search));
+    }
+    setUrlLoaded(true);
+  }, []);
+
+  // Keep URL in sync with params and tab (skip until URL has been read to avoid overwrite).
+  useEffect(() => {
+    if (!urlLoaded) return;
     const searchParams = new URLSearchParams({
       tab,
       faction: params.faction,
@@ -87,7 +93,7 @@ export default function Home() {
       format: params.pointFormat,
     });
     window.history.replaceState(null, "", `?${searchParams.toString()}`);
-  }, [params, tab]);
+  }, [params, tab, urlLoaded]);
 
   const [results, setResults] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(false);
@@ -192,11 +198,13 @@ export default function Home() {
 
   const autoSearchedRef = useRef(false);
   useEffect(() => {
-    if (INITIAL_SEARCH && !autoSearchedRef.current && tabFromSearchString(INITIAL_SEARCH) === "search") {
+    if (!urlLoaded || autoSearchedRef.current) return;
+    const search = window.location.search;
+    if (search && tabFromSearchString(search) === "search") {
       autoSearchedRef.current = true;
       handleSearch();
     }
-  }, [handleSearch]);
+  }, [urlLoaded, handleSearch]);
 
   const [listModal, setListModal] = useState<{
     placement: TopPlacement;
