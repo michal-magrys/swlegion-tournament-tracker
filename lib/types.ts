@@ -25,12 +25,18 @@ export interface SearchParams {
   pointFormat: PointFormat;
 }
 
+export interface Unit {
+  name: string;
+  count: number;
+  upgrades: string[];
+}
+
 export interface ArmyList {
   points: number;
   numActivations: number;
   armyFaction: string;
   commandCards: string[];
-  units: { name: string; count: number; upgrades: string[] }[];
+  units: Unit[];
   battlefieldDeck: {
     conditions: string[];
     deployment: string[];

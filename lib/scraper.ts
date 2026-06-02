@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 import { factionCodeToName } from "./factions";
-import type { Tournament, TopPlacement, ArmyList, PointFormat } from "./types";
+import type { Tournament, TopPlacement, ArmyList, PointFormat, Unit } from "./types";
 import {
   getCachedTopPlacements,
   setCachedTopPlacements,
@@ -40,7 +40,12 @@ export async function fetchEvents(
   while (page <= maxPages) {
     const url = `${BASE_URL}/events/history/?type=tournament&page=${page}`;
     let res: Response;
-    try { res = await fetch(url); } catch (err) { console.error("fetchEvents network error:", err); break; }
+    try {
+      res = await fetch(url);
+    } catch (err) {
+      console.error("fetchEvents network error:", err);
+      break;
+    }
     if (!res.ok) break;
 
     const html = await res.text();
@@ -124,7 +129,12 @@ export async function fetchTopThree(
 
   const url = `${BASE_URL}/events/detail/panel_standings.php?event=${eventId}&section=player`;
   let res: Response;
-  try { res = await fetch(url); } catch (err) { console.error(`fetchTopThree network error (event ${eventId}):`, err); return []; }
+  try {
+    res = await fetch(url);
+  } catch (err) {
+    console.error(`fetchTopThree network error (event ${eventId}):`, err);
+    return [];
+  }
   if (!res.ok) return [];
 
   const html = await res.text();
@@ -246,6 +256,15 @@ export async function fetchArmyList(
   return result;
 }
 
+function extractCardList($: cheerio.CheerioAPI, selector: string): string[] {
+  return $(selector)
+    .toArray()
+    .flatMap((row) =>
+      $(row).find("td").eq(0).find("li").toArray().map((li) => $(li).text().trim())
+    )
+    .filter(Boolean);
+}
+
 async function scrapeArmyList(
   playerId: number,
   eventId: number
@@ -305,7 +324,7 @@ async function scrapeArmyList(
 
     // Units: td[0] contains the name as a direct text node and upgrades in a <ul><li>
     // td[1] contains the quantity, e.g. "x2"
-    const units: { name: string; count: number; upgrades: string[] }[] = [];
+    const units: Unit[] = [];
     $("tr.unit").each((_, row) => {
       const $cell = $(row).find("td").eq(0);
       if ($cell.length === 0) return;
@@ -337,18 +356,9 @@ async function scrapeArmyList(
       });
 
     // Battlefield deck — cards are listed as <li> items
-    const conditions = $("tr.condition")
-      .toArray()
-      .flatMap((row) => $(row).find("td").eq(0).find("li").toArray().map((li) => $(li).text().trim()))
-      .filter(Boolean);
-    const deployment = $("tr.deployment")
-      .toArray()
-      .flatMap((row) => $(row).find("td").eq(0).find("li").toArray().map((li) => $(li).text().trim()))
-      .filter(Boolean);
-    const objective = $("tr.objective")
-      .toArray()
-      .flatMap((row) => $(row).find("td").eq(0).find("li").toArray().map((li) => $(li).text().trim()))
-      .filter(Boolean);
+    const conditions = extractCardList($, "tr.condition");
+    const deployment  = extractCardList($, "tr.deployment");
+    const objective   = extractCardList($, "tr.objective");
 
     const listlink = $('a[href*="tabletopadmiral"]').first().attr("href") ?? "";
 

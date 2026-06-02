@@ -1,14 +1,9 @@
 import type { PointFormat } from '@/lib/types';
+import { PRIMARY_FACTIONS } from '@/lib/factions';
 
-export const FACTIONS = [
-  { code: 'rebellion',          name: 'Rebel Alliance' },
-  { code: 'galactic_empire',    name: 'Galactic Empire' },
-  { code: 'grand_army_republic',name: 'Grand Army of the Republic' },
-  { code: 'confederacy',        name: 'Confederacy of Independent Systems' },
-  { code: 'shadow_collective',  name: 'Mercenary' },
-] as const;
+export { PRIMARY_FACTIONS as FACTIONS } from '@/lib/factions';
 
-export const SORTED_FACTIONS = [...FACTIONS].sort((factionA, factionB) => factionA.name.localeCompare(factionB.name));
+export const SORTED_FACTIONS = [...PRIMARY_FACTIONS].sort((factionA, factionB) => factionA.name.localeCompare(factionB.name));
 
 export const DATE_RANGES = [
   { label: 'Last week',     days:   7 },

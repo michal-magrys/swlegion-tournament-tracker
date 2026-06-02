@@ -1,7 +1,7 @@
 import { fetchEvents, checkTournament } from "@/lib/scraper";
 import { factionCodeToName } from "@/lib/factions";
 import { initDb } from "@/lib/db";
-import type { SearchParams } from "@/lib/types";
+import type { SearchParams, StreamMessage, PointFormat } from "@/lib/types";
 
 export const maxDuration = 60;
 
@@ -15,56 +15,42 @@ export async function POST(request: Request) {
 
   if (!dateFrom || !/^\d{4}-\d{2}-\d{2}$/.test(dateFrom))
     return new Response("Invalid dateFrom", { status: 400 });
-  if (!Number.isInteger(minPlayers) || (minPlayers as number) < 1)
+  if (minPlayers === undefined || !Number.isInteger(minPlayers) || minPlayers < 1)
     return new Response("Invalid minPlayers", { status: 400 });
   if (!faction)
     return new Response("Invalid faction", { status: 400 });
-  if (!VALID_POINT_FORMATS.includes(pointFormat as typeof VALID_POINT_FORMATS[number]))
+  if (!VALID_POINT_FORMATS.includes(pointFormat as PointFormat))
     return new Response("Invalid pointFormat", { status: 400 });
 
-  const validatedParams = { dateFrom, minPlayers, faction, pointFormat } as SearchParams;
-  const factionName = factionCodeToName(validatedParams.faction);
+  const factionName = factionCodeToName(faction);
 
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
     async start(controller) {
+      const emit = (msg: StreamMessage) =>
+        controller.enqueue(encoder.encode(JSON.stringify(msg) + "\n"));
+
       try {
-        controller.enqueue(
-          encoder.encode(
-            JSON.stringify({ type: "status", message: "Fetching tournament list..." }) + "\n"
-          )
-        );
+        emit({ type: "status", message: "Fetching tournament list..." });
 
-        const events = await fetchEvents(validatedParams.dateFrom, validatedParams.minPlayers);
+        const events = await fetchEvents(dateFrom, minPlayers);
 
-        controller.enqueue(
-          encoder.encode(
-            JSON.stringify({
-              type: "status",
-              message: `Found ${events.length} tournaments. Checking standings...`,
-              total: events.length,
-            }) + "\n"
-          )
-        );
+        emit({
+          type: "status",
+          message: `Found ${events.length} tournaments. Checking standings...`,
+          total: events.length,
+        });
 
         let checked = 0;
         for (const event of events) {
-          const result = await checkTournament(event, factionName, validatedParams.pointFormat);
+          const result = await checkTournament(event, factionName, pointFormat as PointFormat);
           checked++;
 
           if (result) {
-            controller.enqueue(
-              encoder.encode(
-                JSON.stringify({ type: "result", tournament: result, checked }) + "\n"
-              )
-            );
+            emit({ type: "result", tournament: result, checked });
           } else {
-            controller.enqueue(
-              encoder.encode(
-                JSON.stringify({ type: "progress", checked }) + "\n"
-              )
-            );
+            emit({ type: "progress", checked });
           }
 
           // Small delay to be respectful to Longshanks
@@ -73,20 +59,12 @@ export async function POST(request: Request) {
           }
         }
 
-        controller.enqueue(
-          encoder.encode(
-            JSON.stringify({ type: "done", checked }) + "\n"
-          )
-        );
+        emit({ type: "done", checked });
       } catch (err) {
-        controller.enqueue(
-          encoder.encode(
-            JSON.stringify({
-              type: "error",
-              message: err instanceof Error ? err.message : "Unknown error",
-            }) + "\n"
-          )
-        );
+        emit({
+          type: "error",
+          message: err instanceof Error ? err.message : "Unknown error",
+        });
       } finally {
         controller.close();
       }
