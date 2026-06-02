@@ -6,6 +6,7 @@ import { FilterPanel } from "./components/FilterPanel";
 import { TournamentCard } from "./components/TournamentCard";
 import { ArmyListModal } from "./components/ArmyListModal";
 import { UnitFrequencyPanel } from "./components/UnitFrequencyPanel";
+import { FactionTrendsChart } from "./components/FactionTrendsChart";
 import { FACTIONS, DATE_RANGES, MIN_PLAYERS_OPTIONS, getDateFrom, type FilterParams } from "./components/constants";
 
 function seenStorageKey(filterParams: FilterParams): string {
@@ -30,6 +31,13 @@ function saveSeenIds(filterParams: FilterParams, ids: Set<number>): void {
 // Captured before any React effects run — used to initialise state from a
 // shared/bookmarked URL without risking the write effect overwriting it first.
 const INITIAL_SEARCH = typeof window !== "undefined" ? window.location.search : "";
+
+type Tab = "search" | "trends";
+
+function tabFromSearchString(search: string): Tab {
+  const tab = new URLSearchParams(search).get("tab");
+  return tab === "trends" ? "trends" : "search";
+}
 
 const DEFAULT_PARAMS: FilterParams = {
   faction: "galactic_empire",
@@ -64,20 +72,22 @@ function paramsFromSearchString(search: string): FilterParams {
 }
 
 export default function Home() {
-  // Lazy initialiser reads from the URL captured at module load — safe against
-  // the write effect overwriting it before this runs.
+  // Lazy initialisers read from the URL captured at module load — safe against
+  // the write effect overwriting them before this runs.
   const [params, setParams] = useState<FilterParams>(() => paramsFromSearchString(INITIAL_SEARCH));
+  const [tab, setTab] = useState<Tab>(() => tabFromSearchString(INITIAL_SEARCH));
 
-  // Keep URL in sync with params (runs on every change, including initial render).
+  // Keep URL in sync with params and tab (runs on every change, including initial render).
   useEffect(() => {
     const searchParams = new URLSearchParams({
+      tab,
       faction: params.faction,
       range: String(params.dateRangeIndex),
       players: String(params.minPlayers),
       format: params.pointFormat,
     });
     window.history.replaceState(null, "", `?${searchParams.toString()}`);
-  }, [params]);
+  }, [params, tab]);
 
   const [results, setResults] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(false);
@@ -182,7 +192,7 @@ export default function Home() {
 
   const autoSearchedRef = useRef(false);
   useEffect(() => {
-    if (INITIAL_SEARCH && !autoSearchedRef.current) {
+    if (INITIAL_SEARCH && !autoSearchedRef.current && tabFromSearchString(INITIAL_SEARCH) === "search") {
       autoSearchedRef.current = true;
       handleSearch();
     }
@@ -240,105 +250,130 @@ export default function Home() {
         </div>
       </div>
 
-      <FilterPanel
-        params={params}
-        loading={loading}
-        onChange={handleParamsChange}
-        onSearch={handleSearch}
-        onCancel={handleCancel}
-      />
-
-      {/* Progress */}
-      {(loading || status) && (
-        <div className="mx-auto max-w-4xl px-4 pt-4">
-          <div className="rounded bg-gray-900/50 border border-gray-800 px-4 py-3 text-sm text-gray-300">
-            {status && <p>{status}</p>}
-            {loading && progress.total > 0 && (
-              <div className="mt-2">
-                <div className="flex justify-between text-xs text-gray-500 mb-1">
-                  <span>Checking tournaments...</span>
-                  <span>
-                    {progress.checked} / {progress.total}
-                  </span>
-                </div>
-                <div className="h-1.5 rounded-full bg-gray-800 overflow-hidden">
-                  <div
-                    role="progressbar"
-                    aria-valuenow={progress.checked}
-                    aria-valuemin={0}
-                    aria-valuemax={progress.total}
-                    className="h-full rounded-full bg-yellow-500 transition-all duration-300"
-                    style={{
-                      width: `${(progress.checked / progress.total) * 100}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
+      {/* Tab bar */}
+      <div className="border-b border-gray-800 bg-[#0d0d14]">
+        <div className="mx-auto max-w-4xl px-4 flex">
+          {(["search", "trends"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                tab === t
+                  ? "border-yellow-400 text-yellow-400"
+                  : "border-transparent text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              {t === "search" ? "Search" : "Trends"}
+            </button>
+          ))}
         </div>
-      )}
-
-      {/* Results */}
-      <div className="mx-auto max-w-4xl px-4 py-6">
-        {!loading && results.length === 0 && progress.checked > 0 && (
-          <p className="text-center text-gray-500 py-12">
-            No tournaments found with {factionName} in the top 3.
-          </p>
-        )}
-
-        {results.length > 0 && (
-          <>
-            <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-1">
-              {results.length} tournament{results.length !== 1 ? "s" : ""} with{" "}
-              {factionName} in top 3
-              {(() => {
-                const newCount = results.filter(
-                  (tournament) => !previousSeenIdsRef.current.has(tournament.id)
-                ).length;
-                return newCount > 0 ? (
-                  <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 normal-case tracking-normal align-middle">
-                    {newCount} new
-                  </span>
-                ) : null;
-              })()}
-            </h2>
-            <p className="text-xs text-gray-500 mb-4">
-              {(() => {
-                const counts: Record<number, number> = {};
-                for (const tournament of results) {
-                  for (const placement of tournament.topThree) {
-                    if (placement.faction.toLowerCase() === factionName.toLowerCase()) {
-                      counts[placement.place] = (counts[placement.place] ?? 0) + 1;
-                    }
-                  }
-                }
-                return [1, 2, 3]
-                  .filter((place) => counts[place])
-                  .map((place) => `${place === 1 ? "1st" : place === 2 ? "2nd" : "3rd"}: ${counts[place]}`)
-                  .join(" · ");
-              })()}
-            </p>
-            <div className="space-y-3">
-              {results.map((tournament) => (
-                <TournamentCard
-                  key={tournament.id}
-                  tournament={tournament}
-                  highlightFaction={factionName}
-                  onPlacementClick={handlePlacementClick}
-                  isNew={!previousSeenIdsRef.current.has(tournament.id)}
-                />
-              ))}
-            </div>
-          </>
-        )}
       </div>
 
-      <UnitFrequencyPanel
-        results={results}
-        factionName={factionName}
-        searchLoading={loading}
-      />
+      {tab === "search" && (
+        <>
+          <FilterPanel
+            params={params}
+            loading={loading}
+            onChange={handleParamsChange}
+            onSearch={handleSearch}
+            onCancel={handleCancel}
+          />
+
+          {/* Progress */}
+          {(loading || status) && (
+            <div className="mx-auto max-w-4xl px-4 pt-4">
+              <div className="rounded bg-gray-900/50 border border-gray-800 px-4 py-3 text-sm text-gray-300">
+                {status && <p>{status}</p>}
+                {loading && progress.total > 0 && (
+                  <div className="mt-2">
+                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                      <span>Checking tournaments...</span>
+                      <span>
+                        {progress.checked} / {progress.total}
+                      </span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-gray-800 overflow-hidden">
+                      <div
+                        role="progressbar"
+                        aria-valuenow={progress.checked}
+                        aria-valuemin={0}
+                        aria-valuemax={progress.total}
+                        className="h-full rounded-full bg-yellow-500 transition-all duration-300"
+                        style={{
+                          width: `${(progress.checked / progress.total) * 100}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Results */}
+          <div className="mx-auto max-w-4xl px-4 py-6">
+            {!loading && results.length === 0 && progress.checked > 0 && (
+              <p className="text-center text-gray-500 py-12">
+                No tournaments found with {factionName} in the top 3.
+              </p>
+            )}
+
+            {results.length > 0 && (
+              <>
+                <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-1">
+                  {results.length} tournament{results.length !== 1 ? "s" : ""} with{" "}
+                  {factionName} in top 3
+                  {(() => {
+                    const newCount = results.filter(
+                      (tournament) => !previousSeenIdsRef.current.has(tournament.id)
+                    ).length;
+                    return newCount > 0 ? (
+                      <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 normal-case tracking-normal align-middle">
+                        {newCount} new
+                      </span>
+                    ) : null;
+                  })()}
+                </h2>
+                <p className="text-xs text-gray-500 mb-4">
+                  {(() => {
+                    const counts: Record<number, number> = {};
+                    for (const tournament of results) {
+                      for (const placement of tournament.topThree) {
+                        if (placement.faction.toLowerCase() === factionName.toLowerCase()) {
+                          counts[placement.place] = (counts[placement.place] ?? 0) + 1;
+                        }
+                      }
+                    }
+                    return [1, 2, 3]
+                      .filter((place) => counts[place])
+                      .map((place) => `${place === 1 ? "1st" : place === 2 ? "2nd" : "3rd"}: ${counts[place]}`)
+                      .join(" · ");
+                  })()}
+                </p>
+                <div className="space-y-3">
+                  {results.map((tournament) => (
+                    <TournamentCard
+                      key={tournament.id}
+                      tournament={tournament}
+                      highlightFaction={factionName}
+                      onPlacementClick={handlePlacementClick}
+                      isNew={!previousSeenIdsRef.current.has(tournament.id)}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          <UnitFrequencyPanel
+            results={results}
+            factionName={factionName}
+            searchLoading={loading}
+          />
+        </>
+      )}
+
+      {tab === "trends" && <FactionTrendsChart />}
 
       {/* Army List Modal */}
       {listModal && (

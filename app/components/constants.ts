@@ -10,7 +10,6 @@ export const DATE_RANGES = [
   { label: 'Last month',    months: 1 },
   { label: 'Last 3 months', months: 3 },
   { label: 'Last 6 months', months: 6 },
-  { label: 'Last year',     months: 12 },
 ] as const;
 
 export const MIN_PLAYERS_OPTIONS = [8, 10, 16, 20, 32] as const;

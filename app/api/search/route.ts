@@ -1,6 +1,6 @@
 import { fetchEvents, checkTournament } from "@/lib/scraper";
 import { factionCodeToName } from "@/lib/factions";
-import { initDb } from "@/lib/db";
+import { initDb, upsertCachedEvents } from "@/lib/db";
 import type { SearchParams, StreamMessage, PointFormat } from "@/lib/types";
 
 export const maxDuration = 60;
@@ -35,6 +35,7 @@ export async function POST(request: Request) {
         emit({ type: "status", message: "Fetching tournament list..." });
 
         const events = await fetchEvents(dateFrom, minPlayers);
+        void upsertCachedEvents(events);
 
         emit({
           type: "status",

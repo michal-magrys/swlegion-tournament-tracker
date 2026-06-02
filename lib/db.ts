@@ -41,6 +41,22 @@ export async function initDb(): Promise<void> {
         PRIMARY KEY (player_id, event_id)
       )
     `;
+    await sql`
+      CREATE TABLE IF NOT EXISTS faction_week_counts (
+        week_start   DATE    NOT NULL,
+        faction_name TEXT    NOT NULL,
+        count        INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY  (week_start, faction_name)
+      )
+    `;
+    await sql`
+      CREATE TABLE IF NOT EXISTS cached_events (
+        event_id     INTEGER PRIMARY KEY,
+        event_date   DATE    NOT NULL,
+        player_count INTEGER NOT NULL,
+        name         TEXT    NOT NULL
+      )
+    `;
     _initialized = true;
   } catch {
     // DB unreachable — app continues without caching
@@ -109,6 +125,82 @@ export async function getCachedArmyList(
   } catch {
     return undefined;
   }
+}
+
+export async function upsertCachedEvents(
+  events: { id: number; name: string; date: string; playerCount: number }[]
+): Promise<void> {
+  const sql = getDb();
+  if (!sql || events.length === 0) return;
+  try {
+    for (const event of events) {
+      await sql`
+        INSERT INTO cached_events (event_id, event_date, player_count, name)
+        VALUES (${event.id}, ${event.date}, ${event.playerCount}, ${event.name})
+        ON CONFLICT (event_id) DO NOTHING
+      `;
+    }
+  } catch { /* ignore */ }
+}
+
+export async function getPlacementsWithDates(
+  dateFrom: string
+): Promise<{ eventDate: string; faction: string }[]> {
+  const sql = getDb();
+  if (!sql) return [];
+  try {
+    const rows = (await sql`
+      SELECT e.event_date::text AS event_date, p.faction
+      FROM cached_events e
+      JOIN cached_top_placements p ON p.event_id = e.event_id
+      WHERE e.event_date >= ${dateFrom}
+    `) as Row[];
+    return rows.map((row) => ({
+      eventDate: row.event_date as string,
+      faction: row.faction as string,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export interface FactionWeekRow {
+  weekStart: string;
+  factionName: string;
+  count: number;
+}
+
+export async function getCachedFactionWeekCounts(dateFrom: string): Promise<FactionWeekRow[]> {
+  const sql = getDb();
+  if (!sql) return [];
+  try {
+    const rows = (await sql`
+      SELECT week_start::text AS week_start, faction_name, count
+      FROM faction_week_counts
+      WHERE week_start >= ${dateFrom}
+    `) as Row[];
+    return rows.map((row) => ({
+      weekStart: row.week_start as string,
+      factionName: row.faction_name as string,
+      count: row.count as number,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function setCachedFactionWeekCounts(entries: FactionWeekRow[]): Promise<void> {
+  const sql = getDb();
+  if (!sql || entries.length === 0) return;
+  try {
+    for (const entry of entries) {
+      await sql`
+        INSERT INTO faction_week_counts (week_start, faction_name, count)
+        VALUES (${entry.weekStart}, ${entry.factionName}, ${entry.count})
+        ON CONFLICT (week_start, faction_name) DO NOTHING
+      `;
+    }
+  } catch { /* ignore */ }
 }
 
 export async function setCachedArmyList(
