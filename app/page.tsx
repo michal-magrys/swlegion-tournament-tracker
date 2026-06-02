@@ -1,19 +1,63 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import type { Tournament, TopPlacement, ArmyList, StreamMessage } from "@/lib/types";
 import { FilterPanel } from "./components/FilterPanel";
 import { TournamentCard } from "./components/TournamentCard";
 import { ArmyListModal } from "./components/ArmyListModal";
-import { FACTIONS, getDateFrom, type FilterParams } from "./components/constants";
+import { FACTIONS, DATE_RANGES, MIN_PLAYERS_OPTIONS, getDateFrom, type FilterParams } from "./components/constants";
+
+// Captured before any React effects run — used to initialise state from a
+// shared/bookmarked URL without risking the write effect overwriting it first.
+const INITIAL_SEARCH = typeof window !== "undefined" ? window.location.search : "";
+
+const DEFAULT_PARAMS: FilterParams = {
+  faction: "galactic_empire",
+  dateRangeIndex: 0,
+  minPlayers: 8,
+  pointFormat: "1000",
+};
+
+function paramsFromSearchString(search: string): FilterParams {
+  const searchParams = new URLSearchParams(search);
+  const result = { ...DEFAULT_PARAMS };
+
+  const faction = searchParams.get("faction");
+  if (faction && FACTIONS.some((factionOption) => factionOption.code === faction)) result.faction = faction;
+
+  const rangeRaw = searchParams.get("range");
+  if (rangeRaw !== null) {
+    const rangeIndex = Number(rangeRaw);
+    if (Number.isInteger(rangeIndex) && rangeIndex >= 0 && rangeIndex < DATE_RANGES.length) result.dateRangeIndex = rangeIndex;
+  }
+
+  const playersRaw = searchParams.get("players");
+  if (playersRaw !== null) {
+    const playerCount = Number(playersRaw);
+    if ((MIN_PLAYERS_OPTIONS as readonly number[]).includes(playerCount)) result.minPlayers = playerCount;
+  }
+
+  const format = searchParams.get("format");
+  if (format === "1000" || format === "600" || format === "all") result.pointFormat = format;
+
+  return result;
+}
 
 export default function Home() {
-  const [params, setParams] = useState<FilterParams>({
-    faction: "galactic_empire",
-    dateRangeIndex: 0,
-    minPlayers: 8,
-    pointFormat: "1000",
-  });
+  // Lazy initialiser reads from the URL captured at module load — safe against
+  // the write effect overwriting it before this runs.
+  const [params, setParams] = useState<FilterParams>(() => paramsFromSearchString(INITIAL_SEARCH));
+
+  // Keep URL in sync with params (runs on every change, including initial render).
+  useEffect(() => {
+    const searchParams = new URLSearchParams({
+      faction: params.faction,
+      range: String(params.dateRangeIndex),
+      players: String(params.minPlayers),
+      format: params.pointFormat,
+    });
+    window.history.replaceState(null, "", `?${searchParams.toString()}`);
+  }, [params]);
 
   const [results, setResults] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(false);
@@ -109,6 +153,14 @@ export default function Home() {
   const handleCancel = useCallback(() => {
     abortRef.current?.abort();
   }, []);
+
+  const autoSearchedRef = useRef(false);
+  useEffect(() => {
+    if (INITIAL_SEARCH && !autoSearchedRef.current) {
+      autoSearchedRef.current = true;
+      handleSearch();
+    }
+  }, [handleSearch]);
 
   const [listModal, setListModal] = useState<{
     placement: TopPlacement;

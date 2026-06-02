@@ -111,6 +111,15 @@ Do not collapse `null` and `undefined` here.
 - Group related state into one object (see `FilterParams` pattern) rather than multiple loose `useState` calls
 - Keep new components in `app/components/`; one component per file
 
+### Naming
+- **Module-level constants**: UPPER_SNAKE_CASE (`DEFAULT_PARAMS`, `INITIAL_SEARCH`)
+- **State variables**: camelCase nouns or adjectives (`results`, `loading`, `listModal`)
+- **Event handlers**: `handle` + PascalCase action (`handleSearch`, `handleCloseModal`)
+- **Refs**: camelCase + `Ref` suffix (`abortRef`, `autoSearchedRef`)
+- **Functions**: camelCase verb-noun phrase (`paramsFromSearchString`, `getDateFrom`)
+- **Types / interfaces / components**: PascalCase (`FilterParams`, `Tournament`, `FilterPanel`)
+- **No abbreviations or single-letter names** — write `searchParams` not `sp`, `rangeIndex` not `idx`, `format` not `fmt`, `playerCount` not `n`. Single-letter loop counters (`i`, `j`) are the only exception.
+
 ### Code style
 - No comments unless the WHY is non-obvious (a hidden constraint, a workaround, a subtle invariant)
 - No "this function does X" docstrings — good names do that
