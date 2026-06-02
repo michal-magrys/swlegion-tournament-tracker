@@ -5,27 +5,38 @@ import type { SearchParams } from "@/lib/types";
 
 export const maxDuration = 60;
 
+const VALID_POINT_FORMATS = ["1000", "600", "all"] as const;
+
 export async function POST(request: Request) {
   await initDb();
 
-  const body = (await request.json()) as SearchParams;
-  const { dateFrom, minPlayers, faction, pointFormat = '1000' } = body;
+  const body = (await request.json()) as Partial<SearchParams>;
+  const { dateFrom, minPlayers, faction, pointFormat = "1000" } = body;
 
-  const factionName = factionCodeToName(faction);
+  if (!dateFrom || !/^\d{4}-\d{2}-\d{2}$/.test(dateFrom))
+    return new Response("Invalid dateFrom", { status: 400 });
+  if (!Number.isInteger(minPlayers) || (minPlayers as number) < 1)
+    return new Response("Invalid minPlayers", { status: 400 });
+  if (!faction)
+    return new Response("Invalid faction", { status: 400 });
+  if (!VALID_POINT_FORMATS.includes(pointFormat as typeof VALID_POINT_FORMATS[number]))
+    return new Response("Invalid pointFormat", { status: 400 });
+
+  const validatedParams = { dateFrom, minPlayers, faction, pointFormat } as SearchParams;
+  const factionName = factionCodeToName(validatedParams.faction);
 
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        // Send a status message while fetching events
         controller.enqueue(
           encoder.encode(
             JSON.stringify({ type: "status", message: "Fetching tournament list..." }) + "\n"
           )
         );
 
-        const events = await fetchEvents(dateFrom, minPlayers);
+        const events = await fetchEvents(validatedParams.dateFrom, validatedParams.minPlayers);
 
         controller.enqueue(
           encoder.encode(
@@ -39,7 +50,7 @@ export async function POST(request: Request) {
 
         let checked = 0;
         for (const event of events) {
-          const result = await checkTournament(event, factionName, pointFormat);
+          const result = await checkTournament(event, factionName, validatedParams.pointFormat);
           checked++;
 
           if (result) {
