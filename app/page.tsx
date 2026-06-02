@@ -5,6 +5,7 @@ import type { Tournament, TopPlacement, ArmyList, StreamMessage } from "@/lib/ty
 import { FilterPanel } from "./components/FilterPanel";
 import { TournamentCard } from "./components/TournamentCard";
 import { ArmyListModal } from "./components/ArmyListModal";
+import { UnitFrequencyPanel } from "./components/UnitFrequencyPanel";
 import { FACTIONS, DATE_RANGES, MIN_PLAYERS_OPTIONS, getDateFrom, type FilterParams } from "./components/constants";
 
 // Captured before any React effects run — used to initialise state from a
@@ -280,6 +281,12 @@ export default function Home() {
           </>
         )}
       </div>
+
+      <UnitFrequencyPanel
+        results={results}
+        factionName={factionName}
+        searchLoading={loading}
+      />
 
       {/* Army List Modal */}
       {listModal && (

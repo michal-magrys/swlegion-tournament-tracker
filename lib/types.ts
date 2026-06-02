@@ -45,6 +45,12 @@ export interface ArmyList {
   listlink: string;
 }
 
+export interface UnitFrequency {
+  name: string;
+  totalCount: number;
+  listsAppearing: number;
+}
+
 export type StreamMessage =
   | { type: 'status';   message: string; total?: number }
   | { type: 'result';   tournament: Tournament; checked: number }
