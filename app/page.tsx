@@ -71,18 +71,21 @@ export default function Home() {
   const [params, setParams] = useState<FilterParams>(DEFAULT_PARAMS);
   const [tab, setTab] = useState<Tab>("search");
   const [urlLoaded, setUrlLoaded] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  // Initialise tab and params from URL on first client render.
+  // Initialise tab, params, and admin flag from URL on first client render.
   useEffect(() => {
     const search = window.location.search;
     if (search) {
       setTab(tabFromSearchString(search));
       setParams(paramsFromSearchString(search));
+      if (new URLSearchParams(search).get("admin") === "1") setIsAdmin(true);
     }
     setUrlLoaded(true);
   }, []);
 
   // Keep URL in sync with params and tab (skip until URL has been read to avoid overwrite).
+  // Preserves admin=1 so the button survives tab/filter changes.
   useEffect(() => {
     if (!urlLoaded) return;
     const searchParams = new URLSearchParams({
@@ -92,8 +95,9 @@ export default function Home() {
       players: String(params.minPlayers),
       format: params.pointFormat,
     });
+    if (isAdmin) searchParams.set("admin", "1");
     window.history.replaceState(null, "", `?${searchParams.toString()}`);
-  }, [params, tab, urlLoaded]);
+  }, [params, tab, urlLoaded, isAdmin]);
 
   const [results, setResults] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(false);
@@ -199,8 +203,9 @@ export default function Home() {
   const autoSearchedRef = useRef(false);
   useEffect(() => {
     if (!urlLoaded || autoSearchedRef.current) return;
-    const search = window.location.search;
-    if (search && tabFromSearchString(search) === "search") {
+    const searchParams = new URLSearchParams(window.location.search);
+    searchParams.delete("admin");
+    if (searchParams.toString() && tabFromSearchString(window.location.search) === "search") {
       autoSearchedRef.current = true;
       handleSearch();
     }
@@ -244,17 +249,49 @@ export default function Home() {
   const factionName =
     FACTIONS.find((faction) => faction.code === params.faction)?.name ?? params.faction;
 
+  const [crawlStatus, setCrawlStatus] = useState<{ running: boolean; result: string }>({
+    running: false,
+    result: "",
+  });
+
+  const handleCrawl = useCallback(async () => {
+    setCrawlStatus({ running: true, result: "" });
+    try {
+      const res = await fetch("/api/admin/crawl", { method: "POST" });
+      const json = await res.json() as { total: number; crawled: number; skipped: number };
+      setCrawlStatus({ running: false, result: `Done — ${json.crawled} crawled, ${json.skipped} skipped (${json.total} total)` });
+    } catch {
+      setCrawlStatus({ running: false, result: "Error triggering crawl." });
+    }
+  }, []);
+
   return (
     <main className="min-h-screen bg-[#0a0a0f] text-gray-100">
       {/* Header */}
       <div className="border-b border-gray-800 bg-[#0d0d14]">
-        <div className="mx-auto max-w-4xl px-4 py-6">
-          <h1 className="text-2xl font-bold tracking-tight text-yellow-400">
-            Legion Tournament Crawler
-          </h1>
-          <p className="mt-1 text-sm text-gray-400">
-            Find Star Wars: Legion tournaments where a faction placed in the top 3
-          </p>
+        <div className="mx-auto max-w-4xl px-4 py-6 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-yellow-400">
+              Legion Tournament Crawler
+            </h1>
+            <p className="mt-1 text-sm text-gray-400">
+              Find Star Wars: Legion tournaments where a faction placed in the top 3
+            </p>
+          </div>
+          {isAdmin && (
+            <div className="flex flex-col items-end gap-1 shrink-0">
+              <button
+                onClick={handleCrawl}
+                disabled={crawlStatus.running}
+                className="px-3 py-1.5 text-xs font-medium rounded border border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {crawlStatus.running ? "Crawling…" : "Run crawl"}
+              </button>
+              {crawlStatus.result && (
+                <span className="text-xs text-gray-500">{crawlStatus.result}</span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
