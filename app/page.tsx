@@ -8,6 +8,25 @@ import { ArmyListModal } from "./components/ArmyListModal";
 import { UnitFrequencyPanel } from "./components/UnitFrequencyPanel";
 import { FACTIONS, DATE_RANGES, MIN_PLAYERS_OPTIONS, getDateFrom, type FilterParams } from "./components/constants";
 
+function seenStorageKey(filterParams: FilterParams): string {
+  return `legion_seen_${filterParams.faction}_${filterParams.dateRangeIndex}_${filterParams.minPlayers}_${filterParams.pointFormat}`;
+}
+
+function loadSeenIds(filterParams: FilterParams): Set<number> {
+  try {
+    const raw = localStorage.getItem(seenStorageKey(filterParams));
+    return raw ? new Set(JSON.parse(raw) as number[]) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function saveSeenIds(filterParams: FilterParams, ids: Set<number>): void {
+  try {
+    localStorage.setItem(seenStorageKey(filterParams), JSON.stringify([...ids]));
+  } catch { /* quota exceeded or private browsing */ }
+}
+
 // Captured before any React effects run — used to initialise state from a
 // shared/bookmarked URL without risking the write effect overwriting it first.
 const INITIAL_SEARCH = typeof window !== "undefined" ? window.location.search : "";
@@ -65,6 +84,7 @@ export default function Home() {
   const [status, setStatus] = useState("");
   const [progress, setProgress] = useState({ checked: 0, total: 0 });
   const abortRef = useRef<AbortController | null>(null);
+  const previousSeenIdsRef = useRef<Set<number>>(new Set());
 
   const handleParamsChange = useCallback((update: Partial<FilterParams>) => {
     setParams((prev) => ({ ...prev, ...update }));
@@ -74,6 +94,9 @@ export default function Home() {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+
+    previousSeenIdsRef.current = loadSeenIds(params);
+    const collectedIds = new Set<number>();
 
     setLoading(true);
     setResults([]);
@@ -122,6 +145,7 @@ export default function Home() {
                   setProgress((prev) => ({ ...prev, total: msg.total! }));
                 break;
               case "result":
+                collectedIds.add(msg.tournament.id);
                 setResults((prev) => [...prev, msg.tournament]);
                 setProgress((prev) => ({ ...prev, checked: msg.checked }));
                 break;
@@ -129,6 +153,7 @@ export default function Home() {
                 setProgress((prev) => ({ ...prev, checked: msg.checked }));
                 break;
               case "done":
+                saveSeenIds(params, collectedIds);
                 setStatus("");
                 break;
               case "error":
@@ -267,6 +292,16 @@ export default function Home() {
             <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-1">
               {results.length} tournament{results.length !== 1 ? "s" : ""} with{" "}
               {factionName} in top 3
+              {(() => {
+                const newCount = results.filter(
+                  (tournament) => !previousSeenIdsRef.current.has(tournament.id)
+                ).length;
+                return newCount > 0 ? (
+                  <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 normal-case tracking-normal align-middle">
+                    {newCount} new
+                  </span>
+                ) : null;
+              })()}
             </h2>
             <p className="text-xs text-gray-500 mb-4">
               {(() => {
@@ -291,6 +326,7 @@ export default function Home() {
                   tournament={tournament}
                   highlightFaction={factionName}
                   onPlacementClick={handlePlacementClick}
+                  isNew={!previousSeenIdsRef.current.has(tournament.id)}
                 />
               ))}
             </div>

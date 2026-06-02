@@ -6,6 +6,7 @@ interface TournamentCardProps {
   tournament: Tournament;
   highlightFaction: string;
   onPlacementClick: (placement: TopPlacement) => void;
+  isNew?: boolean;
 }
 
 function ordinal(place: number): string {
@@ -18,20 +19,28 @@ export function TournamentCard({
   tournament,
   highlightFaction,
   onPlacementClick,
+  isNew = false,
 }: TournamentCardProps) {
   return (
     <div className="rounded-lg border border-gray-800 bg-gray-900/50 p-4 hover:border-gray-700 transition-colors">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <a
-            href={tournament.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-yellow-400 hover:text-yellow-300 font-medium"
-            aria-label={`${tournament.name} (opens in new tab)`}
-          >
-            {tournament.name}
-          </a>
+          <div className="flex items-center gap-2 flex-wrap">
+            <a
+              href={tournament.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-yellow-400 hover:text-yellow-300 font-medium"
+              aria-label={`${tournament.name} (opens in new tab)`}
+            >
+              {tournament.name}
+            </a>
+            {isNew && (
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 uppercase tracking-wide leading-none">
+                New
+              </span>
+            )}
+          </div>
           <div className="flex gap-3 mt-1 text-xs text-gray-500">
             <span>{tournament.date}</span>
             <span>{tournament.playerCount} players</span>
