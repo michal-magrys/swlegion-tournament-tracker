@@ -143,6 +143,31 @@ export async function upsertCachedEvents(
   } catch { /* ignore */ }
 }
 
+export async function getEventsByDateAndMinPlayers(
+  dateFrom: string,
+  minPlayers: number
+): Promise<{ id: number; name: string; date: string; playerCount: number }[]> {
+  const sql = getDb();
+  if (!sql) return [];
+  try {
+    const rows = (await sql`
+      SELECT event_id, name, event_date::text AS date, player_count
+      FROM cached_events
+      WHERE event_date >= ${dateFrom}
+        AND player_count >= ${minPlayers}
+      ORDER BY event_date DESC
+    `) as Row[];
+    return rows.map((row) => ({
+      id: row.event_id as number,
+      name: row.name as string,
+      date: row.date as string,
+      playerCount: row.player_count as number,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function getPlacementsWithDates(
   dateFrom: string
 ): Promise<{ eventDate: string; faction: string }[]> {
