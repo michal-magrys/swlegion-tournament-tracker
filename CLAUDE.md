@@ -90,6 +90,33 @@ Do not collapse `null` and `undefined` here.
 - `StreamMessage` in `lib/types.ts` is a discriminated union — use it wherever stream messages are typed rather than loose `object` or `any`.
 - `Unit` in `lib/types.ts` is the named type for army list units — use it instead of the inline object type.
 
+## Coding Practices
+
+### Where new code belongs
+- New shared types → `lib/types.ts` (named interfaces/unions, not inline shapes)
+- New filter constants or UI options → `app/components/constants.ts`
+- New scraping logic → `lib/scraper.ts` (export a named function)
+- New API endpoints → `app/api/[name]/route.ts`
+- Do not hardcode faction names or codes outside `lib/factions.ts`
+
+### TypeScript
+- Prefer named interfaces/types from `lib/types.ts` over inline `{ field: type }` shapes
+- Use discriminated unions for multi-variant types (see `StreamMessage`)
+- Add `as const` to all literal arrays and tuple-shaped constants
+- Avoid `any`; use `unknown` when the type is genuinely unknown
+- Validate only at system boundaries (API route inputs, external HTML); trust internal types
+
+### React
+- Wrap `useCallback` around every handler passed as a prop to a `React.memo` component — otherwise memoisation is defeated
+- Group related state into one object (see `FilterParams` pattern) rather than multiple loose `useState` calls
+- Keep new components in `app/components/`; one component per file
+
+### Code style
+- No comments unless the WHY is non-obvious (a hidden constraint, a workaround, a subtle invariant)
+- No "this function does X" docstrings — good names do that
+- No abstractions unless the same pattern appears 3+ times in the same file
+- No error handling for scenarios the type system already prevents
+
 ## Scraper Selectors (current as of 2026)
 
 If Longshanks changes its HTML and scraping breaks, update these selectors in `lib/scraper.ts`:
