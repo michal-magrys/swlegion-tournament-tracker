@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 import { factionCodeToName } from "./factions";
-import type { Tournament, TopPlacement, ArmyList, SearchParams } from "./types";
+import type { Tournament, TopPlacement, ArmyList, PointFormat } from "./types";
 import {
   getCachedTopPlacements,
   setCachedTopPlacements,
@@ -39,7 +39,8 @@ export async function fetchEvents(
 
   while (page <= maxPages) {
     const url = `${BASE_URL}/events/history/?type=tournament&page=${page}`;
-    const res = await fetch(url);
+    let res: Response;
+    try { res = await fetch(url); } catch (err) { console.error("fetchEvents network error:", err); break; }
     if (!res.ok) break;
 
     const html = await res.text();
@@ -122,7 +123,8 @@ export async function fetchTopThree(
   if (cached !== null) return cached;
 
   const url = `${BASE_URL}/events/detail/panel_standings.php?event=${eventId}&section=player`;
-  const res = await fetch(url);
+  let res: Response;
+  try { res = await fetch(url); } catch (err) { console.error(`fetchTopThree network error (event ${eventId}):`, err); return []; }
   if (!res.ok) return [];
 
   const html = await res.text();
@@ -182,7 +184,7 @@ export async function fetchTopThree(
 export async function checkTournament(
   event: RawEvent,
   faction: string,
-  pointFormat: SearchParams['pointFormat'] = 'all'
+  pointFormat: PointFormat = 'all'
 ): Promise<Tournament | null> {
   const topThree = await fetchTopThree(event.id);
   if (topThree.length === 0) return null;
@@ -279,13 +281,13 @@ async function scrapeArmyList(
       }
     }
 
-    // Points and activations from any text node matching the pattern
+    // Points and activations — scope to the table to avoid matching unrelated page text.
     let points = 0;
     let numActivations = 0;
-    const bodyText = $("body").text();
-    const pointsMatch = bodyText.match(/(\d+)\s+points/i);
+    const tableText = tableEl.text();
+    const pointsMatch = tableText.match(/(\d+)\s+points/i);
     if (pointsMatch) points = parseInt(pointsMatch[1], 10);
-    const activationsMatch = bodyText.match(/(\d+)\s+activations/i);
+    const activationsMatch = tableText.match(/(\d+)\s+activations/i);
     if (activationsMatch) numActivations = parseInt(activationsMatch[1], 10);
 
     // If points not found in table text, fall back to the textarea JSON ("point" singular)
