@@ -264,10 +264,26 @@ export default function Home() {
 
         {results.length > 0 && (
           <>
-            <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">
+            <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-1">
               {results.length} tournament{results.length !== 1 ? "s" : ""} with{" "}
               {factionName} in top 3
             </h2>
+            <p className="text-xs text-gray-500 mb-4">
+              {(() => {
+                const counts: Record<number, number> = {};
+                for (const tournament of results) {
+                  for (const placement of tournament.topThree) {
+                    if (placement.faction.toLowerCase() === factionName.toLowerCase()) {
+                      counts[placement.place] = (counts[placement.place] ?? 0) + 1;
+                    }
+                  }
+                }
+                return [1, 2, 3]
+                  .filter((place) => counts[place])
+                  .map((place) => `${place === 1 ? "1st" : place === 2 ? "2nd" : "3rd"}: ${counts[place]}`)
+                  .join(" · ");
+              })()}
+            </p>
             <div className="space-y-3">
               {results.map((tournament) => (
                 <TournamentCard
