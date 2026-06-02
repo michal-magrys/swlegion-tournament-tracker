@@ -1,3 +1,5 @@
+export type PointFormat = '1000' | '600' | 'all';
+
 export interface TopPlacement {
   place: number;
   player: string;
@@ -20,7 +22,7 @@ export interface SearchParams {
   dateFrom: string;
   minPlayers: number;
   faction: string;
-  pointFormat: '1000' | '600' | 'all';
+  pointFormat: PointFormat;
 }
 
 export interface ArmyList {
@@ -36,3 +38,10 @@ export interface ArmyList {
   };
   listlink: string;
 }
+
+export type StreamMessage =
+  | { type: 'status';   message: string; total?: number }
+  | { type: 'result';   tournament: Tournament; checked: number }
+  | { type: 'progress'; checked: number }
+  | { type: 'done';     checked: number }
+  | { type: 'error';    message: string };
