@@ -1,36 +1,43 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Legion Tournament Crawler
 
-## Getting Started
+A Next.js app that scrapes [Longshanks](https://legion.longshanks.org) for completed Star Wars: Legion tournaments and shows which ones had a chosen faction finish in the top 3.
 
-First, run the development server:
+## What it does
+
+Pick a faction, a date range, a minimum player count, and a points format — the app crawls recent Longshanks events, filters for tournaments where that faction placed 1st, 2nd, or 3rd, and streams results back to you as they're found. Clicking a placement that has an army list attached opens a modal with the full list: units, upgrades, command cards, and battlefield deck.
+
+Results are cached in a Neon Postgres database to avoid hammering Longshanks on repeated queries.
+
+## Running locally
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The app works without a database — caching is silently skipped if `DATABASE_URL` is not set.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Environment variables
 
-## Learn More
+| Variable | Required | Description |
+|---|---|---|
+| `DATABASE_URL` | No | Neon Postgres connection string for caching scraped results |
 
-To learn more about Next.js, take a look at the following resources:
+Set these in `.env.local` for local development.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Stack
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- [Next.js](https://nextjs.org) (App Router, TypeScript)
+- [Tailwind CSS](https://tailwindcss.com)
+- [Cheerio](https://cheerio.js.org) — server-side HTML scraping
+- [Neon Serverless](https://neon.tech) — optional Postgres caching layer
 
-## Deploy on Vercel
+## Deploying
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Designed for the Vercel free tier. Connect the repo in the Vercel dashboard and set `DATABASE_URL` in the project's environment variables.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## License
+
+MIT
