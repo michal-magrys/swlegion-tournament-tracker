@@ -1,5 +1,5 @@
 import { fetchEvents, fetchTopThree, fetchArmyList } from "@/lib/scraper";
-import { initDb, upsertCachedEvents, getCachedTopPlacements } from "@/lib/db";
+import { initDb, upsertCachedEvents, getEventIdsWithCachedPlacements } from "@/lib/db";
 import type { NextRequest } from "next/server";
 
 export const maxDuration = 60;
@@ -14,18 +14,21 @@ export async function GET(request: NextRequest) {
   await initDb();
 
   const date = new Date();
-  date.setMonth(date.getMonth() - 6);
+  date.setDate(date.getDate() - 14);
   const dateFrom = date.toISOString().slice(0, 10);
 
   const events = await fetchEvents(dateFrom, 1);
   await upsertCachedEvents(events);
 
+  const cachedIds = await getEventIdsWithCachedPlacements(events.map((e) => e.id));
+
   let crawled = 0;
   let skipped = 0;
+  const start = Date.now();
 
   for (const event of events) {
-    const existing = await getCachedTopPlacements(event.id);
-    if (existing !== null) {
+    if (Date.now() - start > 50_000) break;
+    if (cachedIds.has(event.id)) {
       skipped++;
       continue;
     }
@@ -35,8 +38,6 @@ export async function GET(request: NextRequest) {
       await fetchArmyList(placement.playerId, placement.eventId);
     }
     crawled++;
-
-    await new Promise((resolve) => setTimeout(resolve, 200));
   }
 
   return Response.json({ total: events.length, crawled, skipped });

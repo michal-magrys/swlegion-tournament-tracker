@@ -63,6 +63,23 @@ export async function initDb(): Promise<void> {
   }
 }
 
+export async function getEventIdsWithCachedPlacements(
+  eventIds: number[]
+): Promise<Set<number>> {
+  const sql = getDb();
+  if (!sql || eventIds.length === 0) return new Set();
+  try {
+    const rows = (await sql`
+      SELECT DISTINCT event_id
+      FROM cached_top_placements
+      WHERE event_id = ANY(${eventIds})
+    `) as Row[];
+    return new Set(rows.map((r) => r.event_id as number));
+  } catch {
+    return new Set();
+  }
+}
+
 // Returns null when not cached or stale (> 7 days old).
 export async function getCachedTopPlacements(eventId: number): Promise<TopPlacement[] | null> {
   const sql = getDb();
